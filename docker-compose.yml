@@ -1,0 +1,39 @@
+services:
+  # Reverse Poxy
+  proxy:
+    image: nginx:alpine
+    ports:
+      - "8080:80"
+      - "443:443"
+    volumes:
+      - ./proxy/conf.d:/etc/nginx/conf.d:ro
+      - ./proxy/ssl:/etc/nginx/ssl:ro
+    networks:
+      - red_privada
+
+  # Servicios internos
+  servicio1:
+    image: nginx:alpine
+    volumes:
+      - ./html/s1:/usr/share/nginx/html:ro
+    networks:
+      - red_privada
+
+  servicio2:
+    image: nginx:alpine
+    volumes:
+      - ./html/s2:/usr/share/nginx/html:ro
+    networks:
+      - red_privada
+
+  servicio3:
+    image: nginx:alpine
+    volumes:
+      - ./html/s3:/usr/share/nginx/html:ro
+    networks:
+      - red_privada
+
+# Red privada
+networks:
+  red_privada:
+    driver: bridge
