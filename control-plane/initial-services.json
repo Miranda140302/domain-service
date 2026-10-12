@@ -1,0 +1,12 @@
+[
+  {
+    "domain": "servicio1.icc.com",
+    "upstream_ip": "10.8.66.235",
+    "upstream_port": 8081
+  },
+  {
+    "domain": "servicio2.icc.com",
+    "upstream_ip": "10.8.66.235",
+    "upstream_port": 8082
+  }
+]

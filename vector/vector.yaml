@@ -1,0 +1,52 @@
+data_dir: /var/lib/vector
+
+sources:
+  caddy_access:
+    type: file
+    include:
+      - /var/log/caddy/access.json
+    read_from: beginning
+
+transforms:
+  normalize_access:
+    type: remap
+    inputs:
+      - caddy_access
+    drop_on_error: true
+    source: |
+      .timestamp = from_unix_timestamp!(to_int!(.ts) * 1000, unit: "milliseconds")
+      .domain = .request.host
+      .client_ip = .request.remote_ip
+      .method = .request.method
+      .status = to_int!(.status)
+      del(.request)
+      del(.resp_headers)
+      del(.logger)
+      del(.msg)
+      del(.duration)
+      del(.size)
+      del(.bytes_read)
+      del(.ts)
+
+sinks:
+  timescale:
+    type: postgres
+    inputs:
+      - normalize_access
+    endpoint: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+    table: proxy_requests
+    batch:
+      max_events: 500
+      timeout_secs: 1
+
+  live_webhook:
+    type: http
+    inputs:
+      - normalize_access
+    uri: http://backend:8000/api/metrics
+    method: post
+    encoding:
+      codec: json
+    batch:
+      max_events: 100
+      timeout_secs: 1

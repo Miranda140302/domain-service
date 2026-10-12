@@ -1,0 +1,71 @@
+services:
+  caddy:
+    image: caddy:2.9-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443/tcp"
+      - "443:443/udp"
+    volumes:
+      - ./caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - ./caddy/entrypoint.sh:/usr/local/bin/caddy-entrypoint.sh:ro
+      - caddy_data:/data
+      - caddy_config:/config
+      - caddy_logs:/var/log/caddy
+    entrypoint: ["/bin/sh", "/usr/local/bin/caddy-entrypoint.sh"]
+
+  control-plane:
+    build: ./control-plane
+    restart: unless-stopped
+    environment:
+      API_TOKEN: ${DYNAMIC_PROXY_API_TOKEN:?Define DYNAMIC_PROXY_API_TOKEN en .env}
+      CADDY_ADMIN_URL: http://caddy:2019
+      DATABASE_PATH: /var/lib/control-plane/services.sqlite3
+    ports:
+      - "127.0.0.1:${CONTROL_PLANE_PORT:-8080}:8080"
+    volumes:
+      - control_plane_data:/var/lib/control-plane
+      - ./control-plane/initial-services.json:/app/initial-services.json:ro
+
+  postgres:
+    image: timescale/timescaledb:2.17.2-pg16
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-proxy_monitor}
+      POSTGRES_USER: ${POSTGRES_USER:-proxy}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Define POSTGRES_PASSWORD en .env}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./database/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U \"$${POSTGRES_USER}\" -d \"$${POSTGRES_DB}\""]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  vector:
+    image: timberio/vector:0.59.0-alpine
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-proxy_monitor}
+      POSTGRES_USER: ${POSTGRES_USER:-proxy}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Define POSTGRES_PASSWORD en .env}
+    volumes:
+      - ./vector/vector.yaml:/etc/vector/vector.yaml:ro
+      - caddy_logs:/var/log/caddy:ro
+      - vector_data:/var/lib/vector
+    command:
+      - --dangerously-allow-env-var-interpolation
+      - --config
+      - /etc/vector/vector.yaml
+
+volumes:
+  caddy_data:
+  caddy_config:
+  caddy_logs:
+  control_plane_data:
+  postgres_data:
+  vector_data:
